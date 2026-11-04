@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-950 text-slate-100 overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Quantum Chem - Configuración Electrónica Interactiva</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        c1s: '#EF4444',
+                        c2s: '#F97316',
+                        c2p: '#10B981',
+                        c3s: '#06B6D4',
+                        c3p: '#3B82F6',
+                        c4s: '#8B5CF6',
+                        c3d: '#EC4899',
+                    },
+                    animation: {
+                        'shake': 'shake 0.4s cubic-bezier(.36,.07,.19,.97) both',
+                        'glow-pulse': 'glowPulse 1.5s infinite alternate',
+                    },
+                    keyframes: {
+                        shake: {
+                            '10%, 90%': { transform: 'translate3d(-2px, 0, 0)' },
+                            '20%, 80%': { transform: 'translate3d(4px, 0, 0)' },
+                            '30%, 50%, 70%': { transform: 'translate3d(-5px, 0, 0)' },
+                            '40%, 60%': { transform: 'translate3d(5px, 0, 0)' },
+                        },
+                        glowPulse: {
+                            '0%': { boxShadow: '0 0 5px rgba(56, 189, 248, 0.4)' },
+                            '100%': { boxShadow: '0 0 18px rgba(56, 189, 248, 0.9)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 2px;
+        }
+        .box-flash {
+            animation: glowPulse 1s infinite alternate;
+        }
+        .box-error {
+            animation: shake 0.4s ease-in-out;
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.8) !important;
+        }
+        .draggable-electron {
+            cursor: grab;
+            touch-action: none;
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+        }
+        .draggable-electron:active {
+            cursor: grabbing;
+            transform: scale(1.25);
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="h-dvh flex flex-col font-sans bg-slate-950 text-slate-100 overflow-hidden select-none">
+
+    <!-- Header compacto fijado arriba -->
+    <header class="bg-slate-900/90 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between shrink-0 h-12">
+        <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white shadow">
+                <i class="fa-solid fa-atom text-sm animate-spin" style="animation-duration: 8s;"></i>
+            </div>
+            <div>
+                <h1 class="text-xs font-black bg-gradient-to-r from-sky-400 to-indigo-300 bg-clip-text text-transparent leading-none">
+                    QuantumChem
+                </h1>
+                <p id="lvlDescription" class="text-[9px] text-sky-400 font-medium leading-tight">N1: Modelo Bohr</p>
+            </div>
+        </div>
+
+        <!-- Selector de Nivel compacto -->
+        <div class="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+            <button id="tabLvl1" onclick="switchLevel(1)" class="px-2 py-1 rounded-md font-semibold transition-all text-sky-400 bg-slate-800 shadow">
+                N1
+            </button>
+            <button id="tabLvl2" onclick="switchLevel(2)" class="px-2 py-1 rounded-md font-semibold transition-all text-slate-400 hover:text-slate-200">
+                N2
+            </button>
+            <button id="tabLvl3" onclick="switchLevel(3)" class="px-2 py-1 rounded-md font-semibold transition-all text-slate-400 hover:text-slate-200">
+                N3
+            </button>
+        </div>
+    </header>
+
+    <!-- Contenedor Principal Flexible (Distribución Vertical Ajustada) -->
+    <main class="flex-1 flex flex-col p-2 gap-2 overflow-hidden h-[calc(100dvh-3rem)]">
+
+        <!-- Fila Superior: Tarjeta de Elemento y Modelo Átomico Canvas (Lado a Lado/Proporcional) -->
+        <div class="grid grid-cols-12 gap-2 shrink-0 h-44 sm:h-52">
+            
+            <!-- Element Header Card (5 cols) -->
+            <div class="col-span-5 bg-slate-900/90 border border-slate-800 rounded-xl p-2 flex flex-col justify-between shadow-lg">
+                <div class="flex items-center justify-between">
+                    <span id="cardZ" class="text-[10px] font-bold text-sky-400 font-mono">Z=?</span>
+                    <button onclick="generateRandomGame()" class="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 rounded text-[10px] font-semibold text-slate-200 flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-dice text-sky-400"></i> Otro
+                    </button>
+                </div>
+
+                <div class="flex flex-col items-center justify-center my-1">
+                    <div id="cardSymbol" class="text-2xl font-black text-white font-mono leading-none">?</div>
+                    <h2 id="cardName" class="text-[11px] font-bold text-slate-200 text-center truncate w-full mt-0.5">Cargando...</h2>
+                </div>
+
+                <div class="text-center bg-slate-950/80 rounded py-0.5 border border-slate-800/80">
+                    <span class="text-[9px] text-slate-400 uppercase tracking-wider block leading-none">Electrones</span>
+                    <span id="electronCounter" class="text-xs font-mono font-bold text-amber-400">0/0</span>
+                </div>
+            </div>
+
+            <!-- Animated Bohr Canvas Container (7 cols) -->
+            <div id="canvasContainer" class="col-span-7 bg-slate-900/90 border border-slate-800 rounded-xl p-1 shadow-lg flex flex-col items-center justify-between relative overflow-hidden">
+                <div class="w-full flex items-center justify-between px-1 text-[9px] font-semibold text-slate-400">
+                    <span><i class="fa-solid fa-atom text-sky-400"></i> Bohr</span>
+                    <span class="text-slate-500 font-mono">K L M N</span>
+                </div>
+
+                <canvas id="bohrCanvas" width="180" height="180" class="max-h-[135px] sm:max-h-[160px] w-auto h-auto my-auto touch-none relative z-0"></canvas>
+            </div>
+        </div>
+
+        <!-- Notación Espectroscópica en Tiempo Real (Fija y delgada) -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-2 py-1 shrink-0 flex items-center justify-between gap-2">
+            <span class="text-[10px] font-semibold uppercase text-slate-400 whitespace-nowrap"><i class="fa-solid fa-pen-nib text-indigo-400"></i> Notación:</span>
+            <div id="writtenNotation" class="font-mono text-xs bg-slate-950 px-2 py-0.5 rounded border border-slate-800 flex-1 flex flex-wrap items-center gap-1 text-sky-300 min-h-[26px] overflow-x-auto">
+                <!-- Dynamic Notation Span -->
+            </div>
+        </div>
+
+        <!-- Mensaje / Toast Flotante -->
+        <div id="toastAlert" class="hidden px-2 py-1 rounded-lg border bg-red-950/90 border-red-800 text-red-200 text-[11px] font-medium flex items-center justify-between shadow-xl animate-shake shrink-0">
+            <div class="flex items-center gap-1.5 truncate">
+                <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                <span id="toastText" class="truncate">¡Error!</span>
+            </div>
+            <button onclick="hideToast()" class="text-slate-400 hover:text-white px-1">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Área Dinámica Ajustable de Trabajo por Niveles (Ocupa el resto de la pantalla) -->
+        <div class="flex-1 min-h-0 flex flex-col bg-slate-900/90 border border-slate-800 rounded-xl p-2 shadow-lg overflow-hidden relative">
+
+            <!-- NIVEL 1: Arrastre a Capas -->
+            <div id="workspaceLvl1" class="h-full flex flex-col justify-between overflow-hidden">
+                <div class="flex-1 flex flex-col min-h-0 justify-around">
+                    <div class="bg-slate-950 p-1.5 rounded-lg border border-slate-800">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[10px] font-semibold text-slate-300">Repositorio:</span>
+                            <span id="reserveCount" class="text-[10px] font-mono font-bold text-amber-400">0 e⁻</span>
+                        </div>
+                        <div id="electronPool" class="flex flex-wrap gap-1.5 max-h-[55px] overflow-y-auto p-1 bg-slate-900/80 rounded border border-slate-800/80 items-center">
+                            <!-- Draggable items -->
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-1.5 my-1">
+                        <div id="shellK_card" class="p-1.5 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between">
+                            <span class="font-bold text-[10px] flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span> Capa K</span>
+                            <span id="shellK_text" class="font-mono text-[10px] text-sky-300 font-bold">0/2 e⁻</span>
+                        </div>
+                        <div id="shellL_card" class="p-1.5 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between">
+                            <span class="font-bold text-[10px] flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span> Capa L</span>
+                            <span id="shellL_text" class="font-mono text-[10px] text-sky-300 font-bold">0/8 e⁻</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-1 border-t border-slate-800 flex justify-between items-center text-[10px] shrink-0">
+                    <button onclick="resetCurrentLevel()" class="text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                        <i class="fa-solid fa-rotate-left"></i> Reiniciar
+                    </button>
+                    <span id="lvl1Status" class="text-sky-400 font-semibold text-[9px] truncate">Arrastra e⁻ a las órbitas</span>
+                </div>
+            </div>
+
+            <!-- NIVEL 2: Diagrama de Cajas con Scroll Interno -->
+            <div id="workspaceLvl2" class="hidden h-full flex flex-col justify-between overflow-hidden">
+                <div class="text-[10px] text-slate-400 mb-1 flex items-center justify-between shrink-0">
+                    <span>Toca la caja: 1-clic <b class="text-sky-400">↑</b>, 2-clics <b class="text-amber-400">↓</b></span>
+                    <span class="font-mono text-[9px] text-slate-500">Z=11-30</span>
+                </div>
+
+                <div id="orbitalBoxesContainer" class="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+                    <!-- Rendered dynamically -->
+                </div>
+
+                <div class="pt-1 border-t border-slate-800 flex items-center justify-between text-[10px] shrink-0 mt-1">
+                    <button onclick="resetCurrentLevel()" class="text-slate-400 hover:text-slate-200 flex items-center gap-1">
+                        <i class="fa-solid fa-rotate-left"></i> Vaciar Cajas
+                    </button>
+                    <span id="lvl2Status" class="text-slate-400 font-mono text-[9px]">Validación activa</span>
+                </div>
+            </div>
+
+            <!-- NIVEL 3: Modo Inverso / Tabla Periódica Reducida -->
+            <div id="workspaceLvl3" class="hidden h-full flex flex-col justify-between overflow-hidden">
+                <div id="lvl3RevealedBoxes" class="flex flex-wrap gap-1 max-h-[60px] overflow-y-auto p-1 bg-slate-950 rounded border border-slate-800 mb-1 shrink-0">
+                    <!-- Dynamic -->
+                </div>
+
+                <div id="periodicGrid" class="flex-1 grid grid-cols-6 gap-1 overflow-y-auto p-1 bg-slate-950 rounded border border-slate-800 min-h-0">
+                    <!-- Dynamic -->
+                </div>
+
+                <div class="pt-1 border-t border-slate-800 flex items-center justify-between text-[10px] shrink-0 mt-1">
+                    <span id="lvl3Hint" class="text-slate-400 text-[9px] truncate">Deduce Z contando electrones totales.</span>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Modal Modal Éxito -->
+    <div id="successModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xs w-full p-4 text-center shadow-2xl">
+            <div class="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center text-xl mx-auto mb-2 border border-emerald-500/40">
+                <i class="fa-solid fa-trophy animate-bounce"></i>
+            </div>
+            <h3 class="text-base font-bold text-white mb-1">¡Excelente Trabajo!</h3>
+            <p id="successModalBody" class="text-xs text-slate-300 mb-4">Configuración completada correctamente.</p>
+            <button onclick="generateRandomGame(); hideSuccessModal();" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2 px-4 rounded-xl text-xs transition-all shadow-lg shadow-sky-500/20">
+                Siguiente Elemento
+            </button>
+        </div>
+    </div>
+
+    <!-- Script de Lógica -->
+    <script>
+        const SUBSHELL_COLORS = {
+            '1s': { hex: '#EF4444', class: 'border-red-500/60 bg-red-950/20 text-red-400' },
+            '2s': { hex: '#F97316', class: 'border-orange-500/60 bg-orange-950/20 text-orange-400' },
+            '2p': { hex: '#10B981', class: 'border-emerald-500/60 bg-emerald-950/20 text-emerald-400' },
+            '3s': { hex: '#06B6D4', class: 'border-cyan-500/60 bg-cyan-950/20 text-cyan-400' },
+            '3p': { hex: '#3B82F6', class: 'border-blue-500/60 bg-blue-950/20 text-blue-400' },
+            '4s': { hex: '#8B5CF6', class: 'border-purple-500/60 bg-purple-950/20 text-purple-400' },
+            '3d': { hex: '#EC4899', class: 'border-pink-500/60 bg-pink-950/20 text-pink-400' }
+        };
+
+        const SHELL_RADII = { K: 28, L: 48, M: 66, N: 82 };
+        const SHELL_COLORS = { K: '#EF4444', L: '#10B981', M: '#3B82F6', N: '#8B5CF6' };
+
+        const ELEMENTS = [
+            { z: 1, symbol: 'H', name: 'Hidrógeno' },
+            { z: 2, symbol: 'He', name: 'Helio' },
+            { z: 3, symbol: 'Li', name: 'Litio' },
+            { z: 4, symbol: 'Be', name: 'Berilio' },
+            { z: 5, symbol: 'B', name: 'Boro' },
+            { z: 6, symbol: 'C', name: 'Carbono' },
+            { z: 7, symbol: 'N', name: 'Nitrógeno' },
+            { z: 8, symbol: 'O', name: 'Oxígeno' },
+            { z: 9, symbol: 'F', name: 'Flúor' },
+            { z: 10, symbol: 'Ne', name: 'Neón' },
+            { z: 11, symbol: 'Na', name: 'Sodio' },
+            { z: 12, symbol: 'Mg', name: 'Magnesio' },
+            { z: 13, symbol: 'Al', name: 'Aluminio' },
+            { z: 14, symbol: 'Si', name: 'Silicio' },
+            { z: 15, symbol: 'P', name: 'Fósforo' },
+            { z: 16, symbol: 'S', name: 'Azufre' },
+            { z: 17, symbol: 'Cl', name: 'Cloro' },
+            { z: 18, symbol: 'Ar', name: 'Argón' },
+            { z: 19, symbol: 'K', name: 'Potasio' },
+            { z: 20, symbol: 'Ca', name: 'Calcio' },
+            { z: 21, symbol: 'Sc', name: 'Escandio' },
+            { z: 22, symbol: 'Ti', name: 'Titanio' },
+            { z: 23, symbol: 'V', name: 'Vanadio' },
+            { z: 24, symbol: 'Cr', name: 'Cromo' },
+            { z: 25, symbol: 'Mn', name: 'Manganeso' },
+            { z: 26, symbol: 'Fe', name: 'Hierro' },
+            { z: 27, symbol: 'Co', name: 'Cobalto' },
+            { z: 28, symbol: 'Ni', name: 'Níquel' },
+            { z: 29, symbol: 'Cu', name: 'Cobre' },
+            { z: 30, symbol: 'Zn', name: 'Zinc' }
+        ];
+
+        const SUBSHELLS = [
+            { name: '1s', boxes: 1, cap: 2, level: 1 },
+            { name: '2s', boxes: 1, cap: 2, level: 2 },
+            { name: '2p', boxes: 3, cap: 6, level: 2 },
+            { name: '3s', boxes: 1, cap: 2, level: 3 },
+            { name: '3p', boxes: 3, cap: 6, level: 3 },
+            { name: '4s', boxes: 1, cap: 2, level: 4 },
+            { name: '3d', boxes: 5, cap: 10, level: 3 }
+        ];
+
+        let currentLevel = 1;
+        let currentElement = ELEMENTS[0];
+        let bohrShells = { K: 0, L: 0, M: 0, N: 0 };
+        let orbitalState = {};
+        let animationAngle = 0;
+
+        let draggingElectron = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        const bohrCanvas = document.getElementById('bohrCanvas');
+        const ctx = bohrCanvas.getContext('2d');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initOrbitalState();
+            generateRandomGame();
+            renderPeriodicGrid();
+            startAnimationLoop();
+            initLevel1PointerDrag();
+        });
+
+        function initOrbitalState() {
+            orbitalState = {};
+            SUBSHELLS.forEach(sub => {
+                orbitalState[sub.name] = new Array(sub.boxes).fill(0);
+            });
+        }
+
+        function switchLevel(lvl) {
+            currentLevel = lvl;
+            [1, 2, 3].forEach(i => {
+                const tab = document.getElementById(`tabLvl${i}`);
+                const ws = document.getElementById(`workspaceLvl${i}`);
+                if (i === lvl) {
+                    tab.className = "px-2 py-1 rounded-md font-semibold transition-all text-sky-400 bg-slate-800 shadow";
+                    ws.classList.remove('hidden');
+                } else {
+                    tab.className = "px-2 py-1 rounded-md font-semibold transition-all text-slate-400 hover:text-slate-200";
+                    ws.classList.add('hidden');
+                }
+            });
+
+            const desc = document.getElementById('lvlDescription');
+            if (lvl === 1) desc.textContent = "N1: Modelo Bohr (Z=1-10)";
+            else if (lvl === 2) desc.textContent = "N2: Subniveles (Z=11-30)";
+            else desc.textContent = "N3: Modo Inverso";
+
+            generateRandomGame();
+        }
+
+        function generateRandomGame() {
+            hideToast();
+            let minZ = 1, maxZ = 10;
+            if (currentLevel === 2) { minZ = 11; maxZ = 30; }
+            if (currentLevel === 3) { minZ = 1; maxZ = 30; }
+
+            const filtered = ELEMENTS.filter(e => e.z >= minZ && e.z <= maxZ);
+            currentElement = filtered[Math.floor(Math.random() * filtered.length)];
+
+            bohrShells = { K: 0, L: 0, M: 0, N: 0 };
+            initOrbitalState();
+
+            if (currentLevel === 3) {
+                document.getElementById('cardSymbol').textContent = '?';
+                document.getElementById('cardZ').textContent = 'Z=?';
+                document.getElementById('cardName').textContent = 'Elemento Incógnito';
+                autoFillCorrectBoxesForCurrentElement();
+                renderLvl3RevealedBoxes();
+            } else {
+                document.getElementById('cardSymbol').textContent = currentElement.symbol;
+                document.getElementById('cardZ').textContent = `Z=${currentElement.z}`;
+                document.getElementById('cardName').textContent = currentElement.name;
+            }
+
+            if (currentLevel === 1) renderElectronPool();
+            if (currentLevel === 2) renderOrbitalWorkspaceLvl2();
+
+            updateGlobalCounters();
+            renderWrittenNotation();
+        }
+
+        function resetCurrentLevel() {
+            bohrShells = { K: 0, L: 0, M: 0, N: 0 };
+            initOrbitalState();
+            hideToast();
+            if (currentLevel === 1) renderElectronPool();
+            if (currentLevel === 2) renderOrbitalWorkspaceLvl2();
+            updateGlobalCounters();
+            renderWrittenNotation();
+        }
+
+        function renderElectronPool() {
+            const pool = document.getElementById('electronPool');
+            pool.innerHTML = '';
+            const placed = bohrShells.K + bohrShells.L + bohrShells.M + bohrShells.N;
+            const remaining = currentElement.z - placed;
+
+            for (let i = 0; i < remaining; i++) {
+                const eItem = document.createElement('div');
+                eItem.className = 'draggable-electron w-6 h-6 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-500 border border-white/80 shadow flex items-center justify-center font-mono font-bold text-[9px] text-white select-none shrink-0';
+                eItem.innerHTML = 'e⁻';
+                pool.appendChild(eItem);
+            }
+
+            if (remaining === 0) {
+                pool.innerHTML = '<span class="text-[10px] text-emerald-400 font-semibold italic">¡Asignados!</span>';
+            }
+        }
+
+        function initLevel1PointerDrag() {
+            document.addEventListener('pointerdown', (e) => {
+                if (currentLevel !== 1) return;
+                const target = e.target.closest('.draggable-electron');
+                if (!target) return;
+
+                draggingElectron = target;
+                const rect = target.getBoundingClientRect();
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+
+                target.style.position = 'fixed';
+                target.style.left = `${e.clientX - dragOffset.x}px`;
+                target.style.top = `${e.clientY - dragOffset.y}px`;
+                target.style.zIndex = '9999';
+                document.body.appendChild(target);
+
+                if (target.setPointerCapture) {
+                    target.setPointerCapture(e.pointerId);
+                }
+            });
+
+            document.addEventListener('pointermove', (e) => {
+                if (!draggingElectron) return;
+                draggingElectron.style.left = `${e.clientX - dragOffset.x}px`;
+                draggingElectron.style.top = `${e.clientY - dragOffset.y}px`;
+            });
+
+            document.addEventListener('pointerup', (e) => {
+                if (!draggingElectron) return;
+                const canvasRect = bohrCanvas.getBoundingClientRect();
+                const dropX = e.clientX;
+                const dropY = e.clientY;
+
+                if (
+                    dropX >= canvasRect.left &&
+                    dropX <= canvasRect.right &&
+                    dropY >= canvasRect.top &&
+                    dropY <= canvasRect.bottom
+                ) {
+                    const canvasCenterX = canvasRect.left + canvasRect.width / 2;
+                    const canvasCenterY = canvasRect.top + canvasRect.height / 2;
+                    const distFromCenter = Math.hypot(dropX - canvasCenterX, dropY - canvasCenterY);
+
+                    const scale = canvasRect.width / bohrCanvas.width;
+                    const droppedRadius = distFromCenter / scale;
+
+                    handleElectronDropOnCanvas(droppedRadius);
+                }
+
+                if (draggingElectron && draggingElectron.parentNode) {
+                    draggingElectron.parentNode.removeChild(draggingElectron);
+                }
+                draggingElectron = null;
+                renderElectronPool();
+            });
+        }
+
+        function handleElectronDropOnCanvas(droppedRadius) {
+            hideToast();
+
+            let closestShell = null;
+            let minDiff = Infinity;
+
+            ['K', 'L'].forEach(shellKey => {
+                const diff = Math.abs(droppedRadius - SHELL_RADII[shellKey]);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestShell = shellKey;
+                }
+            });
+
+            if (minDiff > 25) {
+                showToast("Suelta el electrón más cerca de las órbitas K o L.");
+                return;
+            }
+
+            if (closestShell === 'L' && bohrShells.K < 2 && currentElement.z > 2) {
+                showToast("Regla de Aufbau: Llena primero la Capa K (2 e⁻).");
+                flashElement('shellK_card');
+                return;
+            }
+
+            if (closestShell === 'K' && bohrShells.K >= 2) {
+                showToast("Capa K llena (máx 2 e⁻). Usa la Capa L.");
+                flashElement('shellL_card');
+                return;
+            }
+
+            if (closestShell === 'L' && bohrShells.L >= 8) {
+                showToast("Capa L al límite (8 e⁻).");
+                return;
+            }
+
+            bohrShells[closestShell]++;
+            updateGlobalCounters();
+            renderWrittenNotation();
+
+            if (bohrShells.K + bohrShells.L === currentElement.z) {
+                showSuccessModal(`¡Excelente! Has configurado las órbitas del **${currentElement.name}**.`);
+            }
+        }
+
+        function renderOrbitalWorkspaceLvl2() {
+            const container = document.getElementById('orbitalBoxesContainer');
+            container.innerHTML = '';
+
+            SUBSHELLS.forEach(sub => {
+                const row = document.createElement('div');
+                const colInfo = SUBSHELL_COLORS[sub.name];
+                row.className = `p-1.5 rounded-lg border ${colInfo.class} flex items-center justify-between gap-1`;
+
+                const title = document.createElement('div');
+                title.className = 'w-8 font-mono font-bold text-xs';
+                title.textContent = sub.name;
+
+                const boxesDiv = document.createElement('div');
+                boxesDiv.className = 'flex items-center gap-1 flex-1 justify-start overflow-x-auto';
+
+                for (let b = 0; b < sub.boxes; b++) {
+                    const val = orbitalState[sub.name][b];
+                    const btn = document.createElement('button');
+                    btn.id = `box_${sub.name}_${b}`;
+                    btn.className = `w-7 h-8 bg-slate-950 border rounded flex items-center justify-center font-mono text-xs transition-all active:scale-95 shrink-0 ${val > 0 ? 'border-sky-400 text-sky-300' : 'border-slate-700 text-slate-600'}`;
+                    btn.onclick = () => onBoxClickLvl2(sub.name, b);
+                    btn.innerHTML = getBoxArrowSymbol(val);
+                    boxesDiv.appendChild(btn);
+                }
+
+                row.appendChild(title);
+                row.appendChild(boxesDiv);
+                container.appendChild(row);
+            });
+        }
+
+        function getBoxArrowSymbol(val) {
+            if (val === 1) return '<span class="text-sky-400 font-bold">↑</span>';
+            if (val === 2) return '<span class="text-amber-400 font-bold">↓</span>';
+            if (val === 3) return '<span class="text-sky-400 font-bold">↑</span><span class="text-amber-400 font-bold">↓</span>';
+            return '<span class="text-slate-800 text-[9px]">-</span>';
+        }
+
+        function onBoxClickLvl2(subName, boxIdx) {
+            hideToast();
+            let currentVal = orbitalState[subName][boxIdx];
+            let nextVal = (currentVal + 1) % 4;
+
+            const subIdx = SUBSHELLS.findIndex(s => s.name === subName);
+            for (let i = 0; i < subIdx; i++) {
+                const prevSub = SUBSHELLS[i];
+                const prevCount = getSubshellCount(prevSub.name);
+                if (prevCount < prevSub.cap) {
+                    showToast(`Aufbau: Llena ${prevSub.name} antes de ocupar ${subName}.`);
+                    triggerBoxError(`box_${subName}_${boxIdx}`);
+                    return;
+                }
+            }
+
+            const subConfig = SUBSHELLS[subIdx];
+            if (subConfig.boxes > 1 && (nextVal === 3 || nextVal === 2)) {
+                const hasEmptyBox = orbitalState[subName].some((v, idx) => idx !== boxIdx && v === 0);
+                if (hasEmptyBox && nextVal === 3) {
+                    showToast(`Regla de Hund: Coloca un e⁻ (↑) por caja en ${subName} antes de emparejar.`);
+                    triggerBoxError(`box_${subName}_${boxIdx}`);
+                    return;
+                }
+            }
+
+            orbitalState[subName][boxIdx] = nextVal;
+            renderOrbitalWorkspaceLvl2();
+            updateGlobalCounters();
+            renderWrittenNotation();
+
+            if (getTotalOrbitalElectrons() === currentElement.z) {
+                showSuccessModal(`¡Excelente! Configuración del **${currentElement.name}** (Z=${currentElement.z}) completada.`);
+            }
+        }
+
+        function getSubshellCount(subName) {
+            return orbitalState[subName].reduce((acc, val) => {
+                if (val === 1 || val === 2) return acc + 1;
+                if (val === 3) return acc + 2;
+                return acc;
+            }, 0);
+        }
+
+        function getTotalOrbitalElectrons() {
+            return SUBSHELLS.reduce((sum, sub) => sum + getSubshellCount(sub.name), 0);
+        }
+
+        function autoFillCorrectBoxesForCurrentElement() {
+            initOrbitalState();
+            let rem = currentElement.z;
+
+            for (let sub of SUBSHELLS) {
+                if (rem <= 0) break;
+                const toPlace = Math.min(rem, sub.cap);
+                if (toPlace <= sub.boxes) {
+                    for (let b = 0; b < toPlace; b++) orbitalState[sub.name][b] = 1;
+                } else {
+                    for (let b = 0; b < sub.boxes; b++) orbitalState[sub.name][b] = 1;
+                    const pairs = toPlace - sub.boxes;
+                    for (let b = 0; b < pairs; b++) orbitalState[sub.name][b] = 3;
+                }
+                rem -= toPlace;
+            }
+        }
+
+        function renderLvl3RevealedBoxes() {
+            const container = document.getElementById('lvl3RevealedBoxes');
+            container.innerHTML = '';
+
+            SUBSHELLS.forEach(sub => {
+                const count = getSubshellCount(sub.name);
+                if (count > 0) {
+                    const badge = document.createElement('div');
+                    const colInfo = SUBSHELL_COLORS[sub.name];
+                    badge.className = `p-1 rounded border ${colInfo.class} font-mono text-[10px] flex items-center gap-1 shrink-0`;
+                    badge.innerHTML = `<b>${sub.name}:</b> ` + orbitalState[sub.name].map(v => `[${getBoxArrowSymbol(v)}]`).join('');
+                    container.appendChild(badge);
+                }
+            });
+        }
+
+        function renderPeriodicGrid() {
+            const grid = document.getElementById('periodicGrid');
+            grid.innerHTML = '';
+
+            ELEMENTS.forEach(elem => {
+                const btn = document.createElement('button');
+                btn.className = 'p-1 bg-slate-900 border border-slate-800 rounded hover:border-sky-400 font-mono text-[10px] flex flex-col items-center justify-center transition-all active:scale-90';
+                btn.innerHTML = `<span class="text-[8px] text-slate-500">${elem.z}</span><b class="text-sky-300 text-xs">${elem.symbol}</b>`;
+                btn.onclick = () => checkLvl3Guess(elem);
+                grid.appendChild(btn);
+            });
+        }
+
+        function checkLvl3Guess(selectedElem) {
+            if (selectedElem.z === currentElement.z) {
+                showSuccessModal(`¡Correcto! Es el **${currentElement.name} (${currentElement.symbol})** Z=${currentElement.z}.`);
+            } else {
+                showToast(`Incorrecto. ${selectedElem.name} tiene Z=${selectedElem.z}. Revisa los electrones.`);
+            }
+        }
+
+        function updateGlobalCounters() {
+            let placed = 0;
+            if (currentLevel === 1) {
+                placed = bohrShells.K + bohrShells.L + bohrShells.M + bohrShells.N;
+                document.getElementById('reserveCount').textContent = `${currentElement.z - placed} e⁻`;
+                document.getElementById('shellK_text').textContent = `${bohrShells.K}/2 e⁻`;
+                document.getElementById('shellL_text').textContent = `${bohrShells.L}/8 e⁻`;
+            } else {
+                placed = getTotalOrbitalElectrons();
+            }
+
+            document.getElementById('electronCounter').textContent = `${placed}/${currentElement.z}`;
+        }
+
+        function renderWrittenNotation() {
+            const notationDiv = document.getElementById('writtenNotation');
+            notationDiv.innerHTML = '';
+            let hasAny = false;
+
+            if (currentLevel === 1) {
+                if (bohrShells.K > 0) {
+                    hasAny = true;
+                    notationDiv.innerHTML += `<span class="mr-1.5"><b style="color:${SUBSHELL_COLORS['1s'].hex}">1s</b><sup>${bohrShells.K}</sup></span>`;
+                }
+                if (bohrShells.L > 0) {
+                    hasAny = true;
+                    const sL = Math.min(2, bohrShells.L);
+                    const pL = Math.max(0, bohrShells.L - 2);
+                    notationDiv.innerHTML += `<span class="mr-1.5"><b style="color:${SUBSHELL_COLORS['2s'].hex}">2s</b><sup>${sL}</sup></span>`;
+                    if (pL > 0) notationDiv.innerHTML += `<span class="mr-1.5"><b style="color:${SUBSHELL_COLORS['2p'].hex}">2p</b><sup>${pL}</sup></span>`;
+                }
+            } else {
+                SUBSHELLS.forEach(sub => {
+                    const count = getSubshellCount(sub.name);
+                    if (count > 0) {
+                        hasAny = true;
+                        notationDiv.innerHTML += `<span class="mr-1.5"><b style="color:${SUBSHELL_COLORS[sub.name].hex}">${sub.name}</b><sup>${count}</sup></span>`;
+                    }
+                });
+            }
+
+            if (!hasAny) {
+                notationDiv.innerHTML = '<span class="text-slate-600 italic text-[10px]">Sin electrones</span>';
+            }
+        }
+
+        function startAnimationLoop() {
+            function animate() {
+                animationAngle += 0.015;
+                drawAnimatedBohrModel();
+                requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        function drawAnimatedBohrModel() {
+            ctx.clearRect(0, 0, bohrCanvas.width, bohrCanvas.height);
+            const cx = bohrCanvas.width / 2;
+            const cy = bohrCanvas.height / 2;
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, 14, 0, 2 * Math.PI);
+            ctx.fillStyle = '#0284c7';
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#38bdf8';
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 9px Outfit, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(currentLevel === 3 ? '+?' : `+${currentElement.z}`, cx, cy);
+
+            let shellCounts = { K: 0, L: 0, M: 0, N: 0 };
+            if (currentLevel === 1) {
+                shellCounts = { ...bohrShells };
+            } else {
+                SUBSHELLS.forEach(sub => {
+                    const cnt = getSubshellCount(sub.name);
+                    if (sub.level === 1) shellCounts.K += cnt;
+                    if (sub.level === 2) shellCounts.L += cnt;
+                    if (sub.level === 3) shellCounts.M += cnt;
+                    if (sub.level === 4) shellCounts.N += cnt;
+                });
+            }
+
+            Object.keys(shellCounts).forEach((shellKey, idx) => {
+                const count = shellCounts[shellKey];
+                const radius = SHELL_RADII[shellKey];
+                const color = SHELL_COLORS[shellKey];
+
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+                ctx.strokeStyle = count > 0 ? color : 'rgba(148, 163, 184, 0.2)';
+                ctx.lineWidth = count > 0 ? 1.5 : 1;
+                ctx.setLineDash(count > 0 ? [] : [3, 3]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                const speedMult = 1 - (idx * 0.15);
+                for (let i = 0; i < count; i++) {
+                    const angle = animationAngle * speedMult + (i * 2 * Math.PI / count);
+                    const ex = cx + radius * Math.cos(angle);
+                    const ey = cy + radius * Math.sin(angle);
+
+                    ctx.beginPath();
+                    ctx.arc(ex, ey, 4, 0, 2 * Math.PI);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toastAlert');
+            document.getElementById('toastText').textContent = msg;
+            t.classList.remove('hidden');
+        }
+
+        function hideToast() {
+            document.getElementById('toastAlert').classList.add('hidden');
+        }
+
+        function triggerBoxError(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.classList.add('box-error');
+                setTimeout(() => el.classList.remove('box-error'), 400);
+            }
+        }
+
+        function flashElement(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.classList.add('box-flash');
+                setTimeout(() => el.classList.remove('box-flash'), 1200);
+            }
+        }
+
+        function showSuccessModal(msg) {
+            document.getElementById('successModalBody').innerHTML = msg;
+            document.getElementById('successModal').classList.remove('hidden');
+        }
+
+        function hideSuccessModal() {
+            document.getElementById('successModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
